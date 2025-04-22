@@ -1,13 +1,13 @@
 # Enable TLS 1.2
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# Define download URIs
+# Define download URIs for AVD agent and bootloader
 $uris = @(
-    "https://go.microsoft.com/fwlink/?linkid=2310011",  # Agent
+    "https://go.microsoft.com/fwlink/?linkid=2310011",  # AVD Agent
     "https://go.microsoft.com/fwlink/?linkid=2311028"   # Bootloader
 )
 
-# Download and unblock installers
+# Download and unblock the installers
 $installers = @()
 foreach ($uri in $uris) {
     $expandedUri = (Invoke-WebRequest -MaximumRedirection 0 -Uri $uri -ErrorAction SilentlyContinue).Headers.Location
@@ -17,9 +17,15 @@ foreach ($uri in $uris) {
     $installers += $fileName
 }
 
-# Install AVD Agent with token
-$token = "${env:REGISTRATIONTOKEN}"  # Terraform will pass it in via protected settings
-Start-Process msiexec.exe -Wait -ArgumentList "/i Microsoft.RDInfra.RDAgent.Installer-x64.msi /quiet REGISTRATIONTOKEN=$token"
+# Assign full paths for installation
+$agentInstaller = $installers | Where-Object { $_ -like "*RDAgent.Installer-x64-1.0.10673.700.msi" }
+$bootloaderInstaller = $installers | Where-Object { $_ -like "*RDAgentBootLoader.Installer-x64-1.0.9023.1100.msi" }
+
+# Get token from Terraform via environment variable (passed by Custom Script Extension)
+$token = "${env:REGISTRATIONTOKEN}"
+
+# Install AVD Agent
+Start-Process msiexec.exe -Wait -ArgumentList "/i `"$agentInstaller`" /quiet REGISTRATIONTOKEN=$token"
 
 # Install Boot Loader
-Start-Process msiexec.exe -Wait -ArgumentList "/i Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi /quiet"
+Start-Process msiexec.exe -Wait -ArgumentList "/i `"$bootloaderInstaller`" /quiet"
