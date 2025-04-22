@@ -1,22 +1,27 @@
-# Enable TLS 1.2 for secure downloads
+param (
+    [string]$token
+)
+
+# Enable TLS 1.2 for secure web requests
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# Download AVD agent installer
+# Download the AVD Agent
 Invoke-WebRequest -Uri "https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv" -OutFile "AVDAgent.msi"
 
-# Download side-by-side stack installer
+# Download the AVD Side-by-Side Stack
 Invoke-WebRequest -Uri "https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH" -OutFile "AVDStack.msi"
 
-# Install AVD agent
+# Install AVD Agent silently
 Start-Process msiexec.exe -Wait -ArgumentList "/i AVDAgent.msi /quiet"
 
-# Install AVD side-by-side stack
+# Install AVD Stack silently
 Start-Process msiexec.exe -Wait -ArgumentList "/i AVDStack.msi /quiet"
 
-# Get registration token from CustomScriptExtension protected setting
-$scriptPath = "C:\Packages\Plugins\Microsoft.Compute.CustomScriptExtension\*\Downloads\*\ProtectedSettings.json"
-$settingsJson = Get-Content -Path (Get-ChildItem -Path $scriptPath -ErrorAction SilentlyContinue | Select-Object -First 1).FullName | ConvertFrom-Json
-$token = $settingsJson.token
-
-# Register the session host
-Start-Process -Wait -FilePath "C:\Program Files\Microsoft RDInfra\RDInfraAgent\RDInfraAgent.exe" -ArgumentList "join $token"
+# Register the VM to the AVD Host Pool using the token
+$Path = "$env:ProgramFiles\Microsoft RDInfra\RDAgentBootLoader"
+if (Test-Path "$Path\RDAgentBootLoader.exe") {
+    cd $Path
+    .\RDAgentBootLoader.exe /Join:$token
+} else {
+    Write-Error "RDAgentBootLoader.exe not found at $Path"
+}
