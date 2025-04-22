@@ -13,8 +13,10 @@ Start-Process msiexec.exe -Wait -ArgumentList "/i AVDAgent.msi /quiet"
 # Install AVD side-by-side stack
 Start-Process msiexec.exe -Wait -ArgumentList "/i AVDStack.msi /quiet"
 
-# Get the registration token from custom data (passed as base64 encoded content)
-$token = Get-Content -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\customdata.txt"
+# Get registration token from CustomScriptExtension protected setting
+$scriptPath = "C:\Packages\Plugins\Microsoft.Compute.CustomScriptExtension\*\Downloads\*\ProtectedSettings.json"
+$settingsJson = Get-Content -Path (Get-ChildItem -Path $scriptPath -ErrorAction SilentlyContinue | Select-Object -First 1).FullName | ConvertFrom-Json
+$token = $settingsJson.token
 
-# Register session host
+# Register the session host
 Start-Process -Wait -FilePath "C:\Program Files\Microsoft RDInfra\RDInfraAgent\RDInfraAgent.exe" -ArgumentList "join $token"
