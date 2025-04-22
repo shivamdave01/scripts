@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$RegistrationToken
 )
+
 Write-Host "Starting AVD Agent installation process at $(Get-Date)"
 
 # Enable TLS 1.2
@@ -106,6 +107,19 @@ if ($bootloaderProcess.ExitCode -ne 0) {
     exit 1
 }
 
-Write-Host "AVD Agent and Bootloader
-::contentReference[oaicite:9]{index=9}
- 
+Write-Host "AVD Agent and Bootloader installed successfully"
+
+# Final checks
+$rdAgentService = Get-Service -Name RDAgentBootLoader -ErrorAction SilentlyContinue
+if ($rdAgentService) {
+    Write-Host "RDAgentBootLoader service status: $($rdAgentService.Status)"
+} else {
+    Write-Host "RDAgentBootLoader service not found!"
+}
+
+Stop-Transcript
+
+# Restart to finalize setup
+Write-Host "Restarting in 20 seconds to complete the installation..."
+Start-Sleep -Seconds 20
+Restart-Computer -Force
