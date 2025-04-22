@@ -3,36 +3,59 @@ param(
     [string]$RegistrationToken
 )
 
+# Start Transcript for detailed logging
+Start-Transcript -Path "C:\Temp\avd-agent-install-transcript.log" -Force
+
+Write-Host "Starting AVD Agent installation process at $(Get-Date)"
+
 # Enable TLS 1.2
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Write-Host "TLS 1.2 enabled"
+
+# Create the C:\Temp directory if it doesn't exist
+if (!(Test-Path -Path "C:\Temp")) {
+    New-Item -Path "C:\Temp" -ItemType Directory -Force | Out-Null
+    Write-Host "Created C:\Temp directory"
+}
+
+# Set working directory to C:\Temp
+Set-Location -Path "C:\Temp"
+Write-Host "Set working directory to C:\Temp"
 
 # Define download URIs for AVD agent and bootloader
 $uris = @(
     "https://go.microsoft.com/fwlink/?linkid=2310011",  # AVD Agent
     "https://go.microsoft.com/fwlink/?linkid=2311028"   # Bootloader
 )
-
-# Create a temporary directory for downloads
-$tempDir = Join-Path $env:TEMP "AVDInstall"
-New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
-Set-Location -Path $tempDir
+Write-Host "Defined download URIs for AVD agent and bootloader"
 
 # Download and unblock the installers
 $installers = @()
 foreach ($uri in $uris) {
+    Write-Host "Processing URI: $uri"
     try {
         $request = Invoke-WebRequest -MaximumRedirection 0 -Uri $uri -ErrorAction SilentlyContinue -UseBasicParsing
         $expandedUri = $request.Headers.Location
+        Write-Host "Got redirect URL via request: $expandedUri"
     } catch {
         $expandedUri = $_.Exception.Response.Headers.Location.AbsoluteUri
+        Write-Host "Got redirect URL via exception: $expandedUri"
     }
     
     $fileName = ($expandedUri).Split('/')[-1]
     Write-Host "Downloading $fileName from $expandedUri"
     
-    Invoke-WebRequest -Uri $expandedUri -OutFile $fileName -UseBasicParsing
-    Unblock-File -Path $fileName
-    $installers += $fileName
+    try {
+        Invoke-WebRequest -Uri $expandedUri -OutFile "C:\Temp\$fileName" -UseBasicParsing
+        Write-Host "Download completed for $fileName"
+        Unblock-File -Path "C:\Temp\$fileName"
+        Write-Host "File unblocked: $fileName"
+        $installers += $fileName
+    }
+    catch {
+        Write-Error "Failed to download $expandedUri. Error: $_"
+        exit 1
+    }
 }
 
 # Assign full paths for installation
@@ -41,41 +64,69 @@ $bootloaderInstaller = $installers | Where-Object { $_ -like "*RDAgentBootLoader
 
 if (-not $agentInstaller) {
     Write-Error "AVD Agent installer not found!"
+    Stop-Transcript
     exit 1
 }
 
 if (-not $bootloaderInstaller) {
     Write-Error "AVD Bootloader installer not found!"
+    Stop-Transcript
     exit 1
 }
 
 Write-Host "Found agent installer: $agentInstaller"
 Write-Host "Found bootloader installer: $bootloaderInstaller"
-Write-Host "Using registration token: $($RegistrationToken.Substring(0, 10))..."
+Write-Host "Using registration token starting with: $($RegistrationToken.Substring(0, 10))..."
+
+# Save registration token to a file for troubleshooting
+$RegistrationToken | Out-File -FilePath "C:\Temp\registration-token.txt" -Force
 
 # Install AVD Agent with the provided registration token
-$agentPath = Join-Path $tempDir $agentInstaller
-$agentArgs = "/i `"$agentPath`" /quiet REGISTRATIONTOKEN=`"$RegistrationToken`" /log `"$tempDir\agent-install.log`""
+$agentPath = Join-Path "C:\Temp" $agentInstaller
+$agentArgs = "/i `"$agentPath`" /quiet REGISTRATIONTOKEN=`"$RegistrationToken`" /log `"C:\Temp\agent-install.log`""
 Write-Host "Installing AVD Agent with command: msiexec.exe $agentArgs"
 $agentProcess = Start-Process msiexec.exe -ArgumentList $agentArgs -Wait -PassThru -NoNewWindow
 
+Write-Host "AVD Agent installer completed with exit code: $($agentProcess.ExitCode)"
 if ($agentProcess.ExitCode -ne 0) {
-    Write-Error "AVD Agent installation failed with exit code $($agentProcess.ExitCode). Check log at $tempDir\agent-install.log"
+    Write-Error "AVD Agent installation failed with exit code $($agentProcess.ExitCode). Check log at C:\Temp\agent-install.log"
+    Stop-Transcript
     exit 1
 }
 
 # Install Boot Loader
-$bootloaderPath = Join-Path $tempDir $bootloaderInstaller
-$bootloaderArgs = "/i `"$bootloaderPath`" /quiet /log `"$tempDir\bootloader-install.log`""
+$bootloaderPath = Join-Path "C:\Temp" $bootloaderInstaller
+$bootloaderArgs = "/i `"$bootloaderPath`" /quiet /log `"C:\Temp\bootloader-install.log`""
 Write-Host "Installing AVD Bootloader with command: msiexec.exe $bootloaderArgs"
 $bootloaderProcess = Start-Process msiexec.exe -ArgumentList $bootloaderArgs -Wait -PassThru -NoNewWindow
 
+Write-Host "AVD Bootloader installer completed with exit code: $($bootloaderProcess.ExitCode)"
 if ($bootloaderProcess.ExitCode -ne 0) {
-    Write-Error "AVD Bootloader installation failed with exit code $($bootloaderProcess.ExitCode). Check log at $tempDir\bootloader-install.log"
+    Write-Error "AVD Bootloader installation failed with exit code $($bootloaderProcess.ExitCode). Check log at C:\Temp\bootloader-install.log"
+    Stop-Transcript
     exit 1
 }
 
 Write-Host "AVD Agent and Bootloader installed successfully"
+
+# Check for AVD Services
+$rdAgentService = Get-Service -Name RDAgentBootLoader -ErrorAction SilentlyContinue
+if ($rdAgentService) {
+    Write-Host "RDAgentBootLoader service status: $($rdAgentService.Status)"
+} else {
+    Write-Host "RDAgentBootLoader service not found!"
+}
+
+# Capture system information for troubleshooting
+Write-Host "System Information:"
+Get-ComputerInfo | Select-Object CsName, WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer | Format-List
+
+# Check network connectivity to AVD service endpoints
+Write-Host "Testing network connectivity to AVD service endpoints:"
+Test-NetConnection -ComputerName "rdbroker.wvd.microsoft.com" -Port 443 | Format-List
+Test-NetConnection -ComputerName "gateway.wvd.microsoft.com" -Port 443 | Format-List
+
+Stop-Transcript
 
 # Force a restart to ensure installation is complete and applied
 Write-Host "Restarting in 20 seconds to complete the installation..."
