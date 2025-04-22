@@ -2,10 +2,6 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$RegistrationToken
 )
-
-# Start Transcript for detailed logging
-Start-Transcript -Path "C:\Temp\avd-agent-install-transcript.log" -Force
-
 Write-Host "Starting AVD Agent installation process at $(Get-Date)"
 
 # Enable TLS 1.2
@@ -15,8 +11,10 @@ Write-Host "TLS 1.2 enabled"
 # Create the C:\Temp directory if it doesn't exist
 if (!(Test-Path -Path "C:\Temp")) {
     New-Item -Path "C:\Temp" -ItemType Directory -Force | Out-Null
-    Write-Host "Created C:\Temp directory"
 }
+
+# Start Transcript for detailed logging
+Start-Transcript -Path "C:\Temp\avd-agent-install-transcript.log" -Force
 
 # Set working directory to C:\Temp
 Set-Location -Path "C:\Temp"
@@ -54,6 +52,7 @@ foreach ($uri in $uris) {
     }
     catch {
         Write-Error "Failed to download $expandedUri. Error: $_"
+        Stop-Transcript
         exit 1
     }
 }
@@ -107,28 +106,6 @@ if ($bootloaderProcess.ExitCode -ne 0) {
     exit 1
 }
 
-Write-Host "AVD Agent and Bootloader installed successfully"
-
-# Check for AVD Services
-$rdAgentService = Get-Service -Name RDAgentBootLoader -ErrorAction SilentlyContinue
-if ($rdAgentService) {
-    Write-Host "RDAgentBootLoader service status: $($rdAgentService.Status)"
-} else {
-    Write-Host "RDAgentBootLoader service not found!"
-}
-
-# Capture system information for troubleshooting
-Write-Host "System Information:"
-Get-ComputerInfo | Select-Object CsName, WindowsProductName, WindowsVersion, OsHardwareAbstractionLayer | Format-List
-
-# Check network connectivity to AVD service endpoints
-Write-Host "Testing network connectivity to AVD service endpoints:"
-Test-NetConnection -ComputerName "rdbroker.wvd.microsoft.com" -Port 443 | Format-List
-Test-NetConnection -ComputerName "gateway.wvd.microsoft.com" -Port 443 | Format-List
-
-Stop-Transcript
-
-# Force a restart to ensure installation is complete and applied
-Write-Host "Restarting in 20 seconds to complete the installation..."
-Start-Sleep -Seconds 20
-Restart-Computer -Force
+Write-Host "AVD Agent and Bootloader
+::contentReference[oaicite:9]{index=9}
+ 
