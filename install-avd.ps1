@@ -2,6 +2,9 @@ param (
     [string]$RegistrationToken
 )
 
+# Trim any quotes
+$RegistrationToken = $RegistrationToken.Trim("'")
+
 $downloadPath = "C:\Temp"
 if (-Not (Test-Path $downloadPath)) {
     New-Item -Path $downloadPath -ItemType Directory -Force | Out-Null
