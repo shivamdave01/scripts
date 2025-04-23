@@ -152,5 +152,5 @@ try {
     }
 }
 catch {
-    Add-Content -Path "C:\wazuh-install.log" -Value "Installation failed at $(Get-Date): $_"
+    Add-Content -Path "C:\wazuh-install.log" -Value "Installation failed at $(Get-Date)"
 }
